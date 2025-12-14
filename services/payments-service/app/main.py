@@ -168,7 +168,7 @@ async def process_payment(payment_request: PaymentProcess, request: Request, aut
         processed_at=datetime.utcnow()
     )
     # Handle Decimal for Mongo (convert to float or Decimal128)
-    payment_dict = payment_db.dict(by_alias=True)
+    payment_dict = payment_db.dict(by_alias=True, exclude={"id"})
     payment_dict["amount"] = float(payment_dict["amount"])
     
     new_payment = await app.mongodb.payments.insert_one(payment_dict)
@@ -262,9 +262,10 @@ async def health_check():
     overall_status = "healthy" if db_status == "connected" and auth_status == "healthy" and order_status == "healthy" else "unhealthy"
     
     if overall_status == "unhealthy":
+        logger.error(f"Health Check Failed: DB={db_status}, Auth={auth_status}, Orders={order_status}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Service Unhealthy"
+            detail=f"Service Unhealthy: DB={db_status}, Auth={auth_status}, Orders={order_status}"
         )
 
     return HealthResponse(

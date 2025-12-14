@@ -14,7 +14,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.
 
 from shared.utils import (
     get_db_client, settings, SuccessResponse, ErrorResponse, 
-    HealthResponse
+    HealthResponse, NotFoundException, UnauthorizedException, AppException
 )
 from shared.logging_config import setup_logging, RequestLoggingMiddleware
 from shared.security_config import setup_rate_limiting, SecurityHeadersMiddleware, limiter
@@ -107,26 +107,21 @@ def str_to_oid(id: str):
     except:
         raise NotFoundException("Invalid ID format")
 
-# --- Endpoints ---
-
-# Cart
-@app.get("/cart", response_model=SuccessResponse[CartResponse])
-@limiter.limit("60/minute")
-async def get_cart(request: Request, user: dict = Depends(get_current_user)):
-    user_id = user["sub"]
+# Helper for cart logic
+async def _get_cart_from_db(user_id: str) -> CartResponse:
     cart = await app.mongodb.carts.find_one({"user_id": user_id})
     if not cart:
         # Create empty cart
         cart_db = CartDB(user_id=user_id, items=[])
-        res = await app.mongodb.carts.insert_one(cart_db.dict(by_alias=True))
+        res = await app.mongodb.carts.insert_one(cart_db.dict(by_alias=True, exclude={"id"}))
         cart = await app.mongodb.carts.find_one({"_id": res.inserted_id})
     
-    # Calculate total and format items (price is float in DB usually, need to ensure consistent decimal usage)
+    # Calculate total and format items
     items_resp = []
     total = Decimal(0)
     items_data = cart.get("items", [])
     for item in items_data:
-        price = Decimal(str(item["price"])) # Restore decimal from likely float/str
+        price = Decimal(str(item["price"])) 
         total += price * item["quantity"]
         items_resp.append(CartItemResponse(
             product_id=item["product_id"],
@@ -135,12 +130,20 @@ async def get_cart(request: Request, user: dict = Depends(get_current_user)):
             name=item.get("name")
         ))
     
-    return SuccessResponse(data=CartResponse(
+    return CartResponse(
         user_id=user_id,
         items=items_resp,
         updated_at=cart["updated_at"],
         total=total
-    ))
+    )
+
+# Cart
+@app.get("/cart", response_model=SuccessResponse[CartResponse])
+@limiter.limit("60/minute")
+async def get_cart(request: Request, user: dict = Depends(get_current_user)):
+    user_id = user["sub"]
+    cart_resp = await _get_cart_from_db(user_id)
+    return SuccessResponse(data=cart_resp)
 
 @app.post("/cart/items", response_model=SuccessResponse[CartResponse])
 async def add_to_cart(item: CartItemAdd, request: Request, user: dict = Depends(get_current_user)):
@@ -157,7 +160,7 @@ async def add_to_cart(item: CartItemAdd, request: Request, user: dict = Depends(
     cart = await app.mongodb.carts.find_one({"user_id": user_id})
     if not cart:
         cart_db = CartDB(user_id=user_id, items=[])
-        await app.mongodb.carts.insert_one(cart_db.dict(by_alias=True))
+        await app.mongodb.carts.insert_one(cart_db.dict(by_alias=True, exclude={"id"}))
         cart = {"user_id": user_id, "items": []} # Minimal dummy to proceed
 
     # 3. Update items
@@ -188,12 +191,15 @@ async def add_to_cart(item: CartItemAdd, request: Request, user: dict = Depends(
     )
     
     # Return updated cart
-    return await get_cart(user)
+    # Return updated cart
+    cart_resp = await _get_cart_from_db(user_id)
+    return SuccessResponse(data=cart_resp)
 
 @app.put("/cart/items/{product_id}", response_model=SuccessResponse[CartResponse])
-async def update_cart_item(product_id: str, update: CartItemUpdate, user: dict = Depends(get_current_user)):
+async def update_cart_item(product_id: str, update: CartItemUpdate, request: Request, user: dict = Depends(get_current_user)):
     user_id = user["sub"]
     cart = await app.mongodb.carts.find_one({"user_id": user_id})
+    # ... (skipping unchanged lines in lookup) ...
     if not cart:
         raise NotFoundException("Cart not found")
     
@@ -212,16 +218,18 @@ async def update_cart_item(product_id: str, update: CartItemUpdate, user: dict =
         {"user_id": user_id},
         {"$set": {"items": items, "updated_at": datetime.utcnow()}}
     )
-    return await get_cart(user)
+    cart_resp = await _get_cart_from_db(user_id)
+    return SuccessResponse(data=cart_resp)
 
 @app.delete("/cart/items/{product_id}", response_model=SuccessResponse[CartResponse])
-async def remove_cart_item(product_id: str, user: dict = Depends(get_current_user)):
+async def remove_cart_item(product_id: str, request: Request, user: dict = Depends(get_current_user)):
     user_id = user["sub"]
     await app.mongodb.carts.update_one(
         {"user_id": user_id},
         {"$pull": {"items": {"product_id": product_id}}}
     )
-    return await get_cart(user)
+    cart_resp = await _get_cart_from_db(user_id)
+    return SuccessResponse(data=cart_resp)
 
 @app.delete("/cart", response_model=SuccessResponse[dict])
 async def clear_cart(user: dict = Depends(get_current_user)):
@@ -292,7 +300,7 @@ async def create_order(request: Request, user: dict = Depends(get_current_user))
     # Actually 'items' in OrderDB is List[OrderItemDB].
     # So we can instantiate OrderDB, then dump it, then convert decimals.
     order_db.items = order_items # Reassign proper types
-    order_dict = order_db.dict(by_alias=True)
+    order_dict = order_db.dict(by_alias=True, exclude={"id"})
     # Recursive float conversion for prices
     order_dict["total_amount"] = float(order_dict["total_amount"]) 
     for i in order_dict["items"]:

@@ -47,6 +47,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8001")
+
+@app.on_event("startup")
+async def startup_db_client():
+    app.mongodb_client = get_db_client()
+    app.mongodb = app.mongodb_client.products_db
+    # Indexes
+    await app.mongodb.products.create_index([("name", "text"), ("description", "text")])
+    await app.mongodb.categories.create_index("slug", unique=True)
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     app.mongodb_client.close()
@@ -145,7 +155,7 @@ async def create_product(product: ProductCreate, request: Request, user: dict = 
     # Verify category existence
     cat = await app.mongodb.categories.find_one({"slug": product.category})
     if not cat:
-        raise HTTPException(status_code=400, detail="Invalid category")
+        raise HTTPException(status_code=400, detail=f"Invalid category: '{product.category}' not found")
 
     product_db = ProductDB(
         vendor_id=user["sub"],
@@ -153,7 +163,7 @@ async def create_product(product: ProductCreate, request: Request, user: dict = 
     )
     # Convert Decimal to float for storage (simple approach) or use BSON Decimal128. 
     # To run effectively without complex Codec setup, using float for price in storage is safer for this prototype.
-    product_dict = product_db.dict(by_alias=True)
+    product_dict = product_db.dict(by_alias=True, exclude={"id"})
     product_dict["price"] = float(product_dict["price"])
 
     new_product = await app.mongodb.products.insert_one(product_dict)
@@ -188,9 +198,10 @@ async def health_check():
     overall_status = "healthy" if db_status == "connected" and auth_status == "healthy" else "unhealthy"
     
     if overall_status == "unhealthy":
+        logger.error(f"Health Check Failed: DB={db_status}, Auth={auth_status}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Service Unhealthy"
+            detail=f"Service Unhealthy: DB={db_status}, Auth={auth_status}"
         )
 
     return HealthResponse(
@@ -266,7 +277,7 @@ async def create_category(category: CategoryCreate, user: dict = Depends(get_cur
         raise HTTPException(status_code=400, detail="Category slug already exists")
 
     cat_db = CategoryDB(**category.dict())
-    new_cat = await app.mongodb.categories.insert_one(cat_db.dict(by_alias=True))
+    new_cat = await app.mongodb.categories.insert_one(cat_db.dict(by_alias=True, exclude={"id"}))
     created_cat = await app.mongodb.categories.find_one({"_id": new_cat.inserted_id})
     created_cat["id"] = str(created_cat["_id"])
 

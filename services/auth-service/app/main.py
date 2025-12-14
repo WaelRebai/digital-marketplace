@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
-from datetime import timedelta
+from datetime import timedelta, datetime
 import os
 import sys
 
@@ -67,7 +67,7 @@ async def register(user: UserRegister):
         password_hash=get_password_hash(user.password),
         role=user.role
     )
-    new_user = await app.mongodb.users.insert_one(user_db.dict(by_alias=True))
+    new_user = await app.mongodb.users.insert_one(user_db.dict(by_alias=True, exclude={"id"}))
     created_user = await app.mongodb.users.find_one({"_id": new_user.inserted_id})
     created_user["id"] = str(created_user["_id"])
 
@@ -77,7 +77,7 @@ async def register(user: UserRegister):
         phone=user.phone,
         address=user.address
     )
-    await app.mongodb.profiles.insert_one(profile_db.dict(by_alias=True))
+    await app.mongodb.profiles.insert_one(profile_db.dict(by_alias=True, exclude={"id"}))
     
     # Construct response
     profile_resp = ProfileResponse(**profile_db.dict())

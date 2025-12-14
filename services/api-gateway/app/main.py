@@ -3,8 +3,19 @@ import time
 import logging
 from datetime import datetime
 import json
+import sys
+import httpx
+from fastapi import FastAPI, Request, Response, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+
+# Add the parent directory to sys.path to resolve shared imports
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
+
 from shared.logging_config import setup_logging, RequestLoggingMiddleware
 from shared.security_config import SecurityHeadersMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # Configuration
 AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8001")
@@ -53,7 +64,7 @@ async def logging_middleware(request: Request, call_next):
 async def verify_token(request: Request):
     # Public routes
     path = request.url.path
-    if path in ["/api/auth/login", "/api/auth/register", "/health", "/docs", "/openapi.json"]:
+    if path in ["/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/health", "/docs", "/openapi.json"]:
         return None
 
     auth_header = request.headers.get("Authorization")

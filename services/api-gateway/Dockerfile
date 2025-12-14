@@ -8,9 +8,16 @@ RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 # Create non-root user
 RUN addgroup --system appuser && adduser --system --group appuser
 
+# Install shared dependencies
+COPY shared/requirements.txt /tmp/shared_requirements.txt
+RUN pip install --no-cache-dir -r /tmp/shared_requirements.txt
+
 # Install dependencies
 COPY services/api-gateway/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy shared utilities
+COPY shared /shared
 
 # Copy application code
 COPY services/api-gateway/app /app/app

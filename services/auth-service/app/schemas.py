@@ -6,7 +6,7 @@ from shared.security_config import validate_password_strength, sanitize_input
 class UserRegister(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8)
-    role: str = Field(..., pattern="^(user|vendor)$")
+    role: str = Field(..., pattern="^(user|vendor|admin)$")
     full_name: str
 
     @field_validator('password')

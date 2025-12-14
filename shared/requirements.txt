@@ -4,3 +4,4 @@ pydantic-settings
 motor
 fastapi
 slowapi
+bcrypt==4.0.1

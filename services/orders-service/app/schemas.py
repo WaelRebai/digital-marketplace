@@ -39,6 +39,12 @@ class OrderStatusUpdate(BaseModel):
         return sanitize_input(v)
 
 
+
+class OrderItemResponse(BaseModel):
+    product_id: str
+    quantity: int
+    price: Decimal
+
 class OrderResponse(BaseModel):
     id: str
     user_id: str
