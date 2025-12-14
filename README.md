@@ -10,7 +10,7 @@ A scalable, microservices-based e-commerce platform built with modern technologi
 
 ## 🏗️ Architecture Overview
 
-The platform is composed of 5 loosely coupled microservices, orchestrated via an API Gateway. Each service handles a specific domain logic and communicates via REST APIs.
+The platform is composed of 5 microservices, orchestrated via an API Gateway. Each service handles a specific domain logic and communicates via REST APIs.
 
 ### Service Breakdown
 | Service | Port | Description |
