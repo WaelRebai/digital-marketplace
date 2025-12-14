@@ -3,6 +3,7 @@ uvicorn
 motor
 python-jose[cryptography]
 passlib[bcrypt]
+slowapi
 multipart
 python-multipart
 pydantic
