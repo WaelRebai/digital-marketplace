@@ -61,7 +61,15 @@ cd digital-marketplace
 ### 2. Environment Setup
 The project works out-of-the-box with Docker. No manual `.env` file creation is needed for the default setup (environment variables are defined in `docker-compose.yml`).
 
+
 ### 3. Start the Platform
+**Option A: Automated Script (Recommended)**
+Use the included Python script to handle port conflicts, cleanup, and verification automatically:
+```bash
+python kill_ports_and_start.py
+```
+
+**Option B: Manual Docker Compose**
 Build and start all services in detached mode:
 ```bash
 docker-compose up -d --build
@@ -192,6 +200,14 @@ Services are configured via `docker-compose.yml`. Key variables:
 - **Database Connection**: Use `docker-compose logs mongodb` to check if Mongo is healthy.
 - **Service Unavailable (503)**: Check if downstream services are running: `docker ps -a`.
 - **Permission Errors**: Ensure you are running Docker with appropriate permissions.
+
+### Stopping Services
+To stop all services cleanly:
+```bash
+python stop_marketplace.py
+# Or manually:
+docker-compose down
+```
 
 ---
 
