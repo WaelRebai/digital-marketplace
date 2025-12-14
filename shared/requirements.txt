@@ -3,3 +3,4 @@ passlib[bcrypt]
 pydantic-settings
 motor
 fastapi
+slowapi

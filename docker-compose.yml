@@ -1,58 +1,165 @@
 version: '3.8'
 
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   mongodb:
-    image: mongo:latest
+    image: mongo:7
     ports:
       - "27017:27017"
     volumes:
-      - mongodb_data:/data/db
+      - mongo_data:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password123
+    networks:
+      - marketplace-network
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   auth-service:
-    build: ./services/auth-service
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
     ports:
-      - "8001:8000"
+      - "8001:8001"
     environment:
-      - MONGO_URL=mongodb://mongodb:27017
+      - MONGO_URL=mongodb://admin:password123@mongodb:27017
+      - JWT_SECRET=supersecretkey_change_in_production
+      - JWT_ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
+    networks:
+      - marketplace-network
+    restart: unless-stopped
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   products-service:
-    build: ./services/products-service
+    build:
+      context: .
+      dockerfile: services/products-service/Dockerfile
     ports:
-      - "8002:8000"
+      - "8002:8002"
     environment:
-      - MONGO_URL=mongodb://mongodb:27017
+      - MONGO_URL=mongodb://admin:password123@mongodb:27017
+      - AUTH_SERVICE_URL=http://auth-service:8001
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    networks:
+      - marketplace-network
+    restart: unless-stopped
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   orders-service:
-    build: ./services/orders-service
+    build:
+      context: .
+      dockerfile: services/orders-service/Dockerfile
     ports:
-      - "8003:8000"
+      - "8003:8003"
     environment:
-      - MONGO_URL=mongodb://mongodb:27017
+      - MONGO_URL=mongodb://admin:password123@mongodb:27017
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - PRODUCTS_SERVICE_URL=http://products-service:8002
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      products-service:
+        condition: service_started
+    networks:
+      - marketplace-network
+    restart: unless-stopped
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   payments-service:
-    build: ./services/payments-service
+    build:
+      context: .
+      dockerfile: services/payments-service/Dockerfile
     ports:
-      - "8004:8000"
+      - "8004:8004"
     environment:
-      - MONGO_URL=mongodb://mongodb:27017
+      - MONGO_URL=mongodb://admin:password123@mongodb:27017
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - ORDERS_SERVICE_URL=http://orders-service:8003
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      orders-service:
+        condition: service_started
+    networks:
+      - marketplace-network
+    restart: unless-stopped
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   api-gateway:
-    build: ./services/api-gateway
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
     ports:
       - "8000:8000"
+    environment:
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - PRODUCTS_SERVICE_URL=http://products-service:8002
+      - ORDERS_SERVICE_URL=http://orders-service:8003
+      - PAYMENTS_SERVICE_URL=http://payments-service:8004
     depends_on:
-      - auth-service
-      - products-service
-      - orders-service
-      - payments-service
+      auth-service:
+        condition: service_started
+      products-service:
+        condition: service_started
+      orders-service:
+        condition: service_started
+      payments-service:
+        condition: service_started
+    networks:
+      - marketplace-network
+    restart: unless-stopped
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
 volumes:
-  mongodb_data:
+  mongo_data:
+
+
+networks:
+  marketplace-network:
+    driver: bridge

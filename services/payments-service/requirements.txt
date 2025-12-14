@@ -1,4 +1,6 @@
 fastapi
 uvicorn
 motor
+httpx
 pydantic
+pydantic-settings

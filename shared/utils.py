@@ -6,13 +6,16 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
 from jose import JWTError, jwt
+import uuid
 
 # --- Configuration ---
 class Settings(BaseSettings):
     MONGO_URL: str = "mongodb://mongodb:27017"
     SECRET_KEY: str = "secret"
+    REFRESH_SECRET_KEY: str = "refresh_secret"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     class Config:
         env_file = ".env"
@@ -37,9 +40,28 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
+        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    # Add JTI
+    if "jti" not in to_encode:
+        to_encode.update({"jti": str(uuid.uuid4())})
+
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return encoded_jwt
+
+def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    
+    if "jti" not in to_encode:
+        to_encode.update({"jti": str(uuid.uuid4())})
+        
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, settings.REFRESH_SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
 def verify_token(token: str) -> dict:
@@ -65,6 +87,15 @@ class ErrorResponse(BaseModel):
     success: bool = False
     error: str
     details: Optional[Any] = None
+
+class HealthResponse(BaseModel):
+    service: str
+    status: str
+    timestamp: datetime
+    version: str
+    database: Optional[str] = None
+    dependencies: Optional[dict] = None
+
 
 # --- Exceptions ---
 class AppException(HTTPException):
