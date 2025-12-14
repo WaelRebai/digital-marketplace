@@ -23,7 +23,7 @@ The platform is composed of 5 microservices, orchestrated via an API Gateway. Ea
 
 ### Communication Flow
 1. **Client** sends request to **API Gateway**.
-2. **Gateway** verifies JWT token with **Auth Service** (if protected).
+2. **Gateway** verifies JWT token with **Auth Service**.
 3. **Gateway** logs request and routes to target (e.g., **Orders Service**).
 4. **Orders Service** may call **Products Service** (synchronous HTTP via `httpx`) to validate stock.
 5. Response flows back through Gateway to Client.
@@ -45,7 +45,7 @@ The platform is composed of 5 microservices, orchestrated via an API Gateway. Ea
 
 - **Docker** and **Docker Compose** installed.
 - **Git** for version control.
-- (Optional) **MongoDB Compass** for database inspection (`mongodb://admin:password123@localhost:27017`).
+- (Optional) **MongoDB Compass** for database inspection.
 - (Optional) **Postman** or **curl** for API testing.
 
 ---
@@ -208,29 +208,6 @@ python stop_marketplace.py
 # Or manually:
 docker-compose down
 ```
-
----
-
-## 🔮 Future Enhancements
-
-- 📧 **Notifications Service**: Email/SMS updates for order status.
-- 📦 **Inventory Reservation**: Real-time stock reservation during checkout.
-- 💳 **Real Payment Gateway**: Stripe or PayPal integration.
-- 📈 **Analytics Dashboard**: Admin view for sales and metrics.
-- ☸️ **Kubernetes Support**: Helm charts for K8s deployment.
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome!
-1. Fork the project.
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`).
-4. Push to the branch (`git push origin feature/AmazingFeature`).
-5. Open a Pull Request.
-
----
 
 ## 📄 License
 
